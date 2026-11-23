@@ -10,6 +10,21 @@ local UserInputService = game:GetService("UserInputService")
 local whitelist = {
     -- 白名单用户列表
    "Kedada001",
+    "zero456127",
+    "lyk19940612",
+    "lvy56646269",
+    "Trip0702",
+    "wsak59",
+    "fungfungchu0409",
+    "yigub1",
+    "Yingyicarol",
+    "Mayby886",
+    "lIIlIlllIIllIIllIIII",
+    "2223301118du",
+    "mimi0425111",
+    "das8836",
+    "alulu00123",
+    "iknu2_5",
     "nnphxn",
     "phgn306",
     "fighthebunny",
@@ -22,6 +37,7 @@ local whitelist = {
 "BroknAngels6",
 "Robloxianj8v8q3i6g",
 "N_mp666"
+
 }
 -- 检查用户是否在白名单中
 local function isWhitelisted(player)
@@ -6981,7 +6997,7 @@ local function createSafePlatformUI()
 
 	local headerBar = Instance.new("Frame")
 	headerBar.Name = "HeaderBar"
-	headerBar.Size = UDim2.new(1, -12, 0, 24)
+	headerBar.Size = UDim2.new(1, -12, 0, 18)
 	headerBar.Position = UDim2.new(0, 6, 0, 2)
 	headerBar.BackgroundTransparency = 1
 	headerBar.Parent = mainFrame
@@ -7158,7 +7174,98 @@ end
 local function togglePlatform()
 	setSafePlatformEnabled(not platformEnabled)
 end
+local playerCollisionEnabled = false
+local playerCollisionConn = nil
+local savedPartCanCollide = {}
 
+local function applyCollisionToCharacter(character, enabled)
+	if not character then return end
+	for _, part in ipairs(character:GetDescendants()) do
+		if part:IsA("BasePart") then
+			if enabled then
+				if savedPartCanCollide[part] == nil then
+					savedPartCanCollide[part] = part.CanCollide
+				end
+				pcall(function()
+					part.CanCollide = true
+				end)
+			else
+				if savedPartCanCollide[part] ~= nil then
+					local orig = savedPartCanCollide[part]
+					savedPartCanCollide[part] = nil
+					pcall(function()
+						part.CanCollide = orig
+					end)
+				end
+			end
+		end
+	end
+end
+
+local function togglePlayerCollision(enabled)
+	local PlayersService = game:GetService("Players")
+	local RunServiceService = game:GetService("RunService")
+	local lp = LocalPlayer or PlayersService.LocalPlayer
+
+	if playerCollisionConn then
+		playerCollisionConn:Disconnect()
+		playerCollisionConn = nil
+	end
+
+	if enabled then
+		playerCollisionEnabled = true
+
+		for _, plr in ipairs(PlayersService:GetPlayers()) do
+			if plr ~= lp and plr.Character then
+				applyCollisionToCharacter(plr.Character, true)
+			end
+		end
+
+		playerCollisionConn = RunServiceService.Heartbeat:Connect(function()
+			if not playerCollisionEnabled then return end
+			local curLp = LocalPlayer or PlayersService.LocalPlayer
+			for _, plr in ipairs(PlayersService:GetPlayers()) do
+				if plr ~= curLp and plr.Character then
+					applyCollisionToCharacter(plr.Character, true)
+				end
+			end
+		end)
+
+		if type(Message) == "function" then
+			pcall(function()
+				Message("Va chạm người chơi", "Đã bật: Không đi xuyên người chơi khác", 2)
+			end)
+		end
+	else
+		playerCollisionEnabled = false
+
+		for _, plr in ipairs(PlayersService:GetPlayers()) do
+			if plr ~= lp and plr.Character then
+				applyCollisionToCharacter(plr.Character, false)
+			end
+		end
+
+		-- Dọn các part đã rời game hoặc bị xóa
+		for part, _ in pairs(savedPartCanCollide) do
+			if not part or not part.Parent then
+				savedPartCanCollide[part] = nil
+			end
+		end
+
+		if type(Message) == "function" then
+			pcall(function()
+				Message("Va chạm người chơi", "Đã tắt: Có thể đi xuyên người chơi khác", 2)
+			end)
+		end
+	end
+
+	if type(config) == "table" then
+		config.playerCollisionEnabled = playerCollisionEnabled
+		if type(autoSaveConfig) == "function" then
+			pcall(autoSaveConfig)
+		end
+	end
+end
 -- 人物子菜单
 local figureSection = mainUI:NewSection("Nhân vật")
 figureSection:CreateToggle("Ghim", function(enabled)
@@ -7290,10 +7397,10 @@ figureSection:CreateToggle("Gravity", function(enabled)
     config.gravityLockEnabled = enabled
     autoSaveConfig()
 end)
-figureSection:CreateToggle("Tự động bắt", function(enabled)
-    toggleContinuousGrab(enabled)
-end)
 
+figureSection:CreateToggle("Va chạm người chơi", function(enabled)
+    togglePlayerCollision(enabled)
+end)
 figureSection:CreateToggle("Kill", function(enabled)
     ToggleMiaoShaUI()
 end)
@@ -7439,21 +7546,25 @@ end
 
 -- 平台创建功能
 -- 平台创建功能
+-- ===================== 1. TẠO NỀN (CÓ BẢNG CHỌN Y & NÚT ❤️) =====================
 local platformBedrock = nil
 local platformEnabled = (config and config.platformEnabled) or false
 local platformY = (config and type(config.platformY) == "number") and config.platformY or 0
+
 local PLATFORM_STEP = 50
 local PLATFORM_MAX_Y = 5000
 local PLATFORM_MIN_Y = -5000
 local PLATFORM_HEIGHT = 2
-
+local PLATFORM_WIDTH = 10000
+local PLATFORM_LENGTH = 10000
+local PLATFORM_LENGTH = 10000
+local PLATFORM_ TRANSPARENCY = 10
 local platformGui = nil
 local updatePlatformYDisplay = nil
 
 local function clampPlatformY(val)
 	local num = tonumber(val) or 0
 	num = math.clamp(num, PLATFORM_MIN_Y, PLATFORM_MAX_Y)
-	-- Làm tròn theo bội số của 50
 	return math.floor((num + (num >= 0 and 25 or -25)) / PLATFORM_STEP) * PLATFORM_STEP
 end
 
@@ -7461,6 +7572,7 @@ platformY = clampPlatformY(platformY)
 
 local function syncPlatformPosition()
 	if platformBedrock and platformBedrock.Parent then
+		platformBedrock.Size = Vector3.new(PLATFORM_WIDTH, PLATFORM_HEIGHT, PLATFORM_LENGTH)
 		platformBedrock.Position = Vector3.new(0, platformY, 0)
 		platformBedrock.Color = Color3.fromRGB(145, 145, 150)
 		platformBedrock.Transparency = 0.55
@@ -7564,7 +7676,7 @@ local function createPlatformUI()
 
 	local mainFrame = Instance.new("Frame")
 	mainFrame.Name = "PlatformYFrame"
-	mainFrame.Size = UDim2.new(0, 226, 0, 74)
+	mainFrame.Size = UDim2.new(0, 184, 0, 62)
 	mainFrame.Position = UDim2.new(0, 20, 0.5, 75)
 	mainFrame.BackgroundColor3 = darkBgColor
 	mainFrame.BackgroundTransparency = 0.25
@@ -7591,7 +7703,7 @@ local function createPlatformUI()
 	local titleLabel = Instance.new("TextLabel")
 	titleLabel.Size = UDim2.new(1, 0, 1, -1)
 	titleLabel.BackgroundTransparency = 1
-	titleLabel.Text = "Tọa độ Y Nền (±50 | Max 5000)"
+	titleLabel.Text = "Tọa độ Y"
 	titleLabel.Font = Enum.Font.SourceSansBold
 	titleLabel.TextSize = 12
 	titleLabel.TextColor3 = textLightColor
@@ -7606,7 +7718,6 @@ local function createPlatformUI()
 	divider.BorderSizePixel = 0
 	divider.Parent = headerBar
 
-	-- Kéo di chuyển bảng nhỏ
 	do
 		local dragging = false
 		local dragStart = nil
@@ -7665,7 +7776,7 @@ local function createPlatformUI()
 
 	local minusBtn = Instance.new("TextButton")
 	minusBtn.Name = "MinusYBtn"
-	minusBtn.Size = UDim2.new(0, 32, 0, 30)
+	minusBtn.Size = UDim2.new(0, 32, 0, 27)
 	minusBtn.Position = UDim2.new(0, 6, 0, 34)
 	minusBtn.BackgroundColor3 = btnBgColor
 	minusBtn.BackgroundTransparency = 0.25
@@ -7688,7 +7799,7 @@ local function createPlatformUI()
 
 	local valueLabel = Instance.new("TextLabel")
 	valueLabel.Name = "CurrentYLabel"
-	valueLabel.Size = UDim2.new(1, -122, 0, 30)
+	valueLabel.Size = UDim2.new(1, -122, 0, 27)
 	valueLabel.Position = UDim2.new(0, 42, 0, 34)
 	valueLabel.BackgroundColor3 = Color3.fromRGB(40, 38, 38)
 	valueLabel.BackgroundTransparency = 0.35
@@ -7705,7 +7816,7 @@ local function createPlatformUI()
 
 	local plusBtn = Instance.new("TextButton")
 	plusBtn.Name = "PlusYBtn"
-	plusBtn.Size = UDim2.new(0, 32, 0, 30)
+	plusBtn.Size = UDim2.new(0, 32, 0, 27)
 	plusBtn.Position = UDim2.new(1, -76, 0, 34)
 	plusBtn.BackgroundColor3 = btnBgColor
 	plusBtn.BackgroundTransparency = 0.25
@@ -7728,7 +7839,7 @@ local function createPlatformUI()
 
 	local tpHeartBtn = Instance.new("TextButton")
 	tpHeartBtn.Name = "TeleportPlatformBtn"
-	tpHeartBtn.Size = UDim2.new(0, 34, 0, 30)
+	tpHeartBtn.Size = UDim2.new(0, 34, 0, 27)
 	tpHeartBtn.Position = UDim2.new(1, -40, 0, 34)
 	tpHeartBtn.BackgroundColor3 = Color3.fromRGB(68, 44, 48)
 	tpHeartBtn.BackgroundTransparency = 0.2
@@ -7773,9 +7884,10 @@ local function createPlatformUI()
 	updatePlatformYDisplay()
 end
 
-local function togglePlatform()
-	if platformEnabled then
-		-- Xóa nền & ẩn bảng chọn tọa độ Y
+local function togglePlatform(forceState)
+	local targetState = (type(forceState) == "boolean") and forceState or (not platformEnabled)
+
+	if not targetState then
 		if platformBedrock and platformBedrock.Parent then
 			platformBedrock:Destroy()
 			platformBedrock = nil
@@ -7789,17 +7901,18 @@ local function togglePlatform()
 			end
 		end
 		if type(Message) == "function" then
-			Message("Tạo nền", "Đã xóa nền", 2)
+			pcall(function()
+				Message("Tạo nền", "Đã xóa nền", 2)
+			end)
 		end
 	else
-		-- Tạo nền màu xám trong suốt & hiện bảng chọn tọa độ Y
 		if platformBedrock and platformBedrock.Parent then
 			platformBedrock:Destroy()
 		end
 		platformBedrock = Instance.new("Part")
 		platformBedrock.Name = "PlatformBedrock"
 		platformBedrock.Anchored = true
-		platformBedrock.Size = Vector3.new(8192, PLATFORM_HEIGHT, 8192)
+		platformBedrock.Size = Vector3.new(PLATFORM_WIDTH, PLATFORM_HEIGHT, PLATFORM_LENGTH)
 		platformBedrock.Position = Vector3.new(0, platformY, 0)
 		platformBedrock.Color = Color3.fromRGB(145, 145, 150)
 		platformBedrock.Transparency = 0.55
@@ -7817,14 +7930,109 @@ local function togglePlatform()
 			end
 		end
 		if type(Message) == "function" then
-			Message("Tạo nền", "Đã tạo nền (Y: " .. tostring(platformY) .. ")", 2)
+			pcall(function()
+				Message("Tạo nền", "Đã tạo nền (Y: " .. tostring(platformY) .. ")", 2)
+			end)
 		end
 	end
 end
--- 其他子菜单
+
+
+-- ===================== 2. NỀN VÔ HẠN (BÁM X, Z THEO NHÂN VẬT & CỐ ĐỊNH Y = 0) =====================
+local infinitePlatformPart = nil
+local infinitePlatformEnabled = (config and config.infinitePlatformEnabled) or false
+local infinitePlatformConn = nil
+
+local INF_PLATFORM_Y = 0
+local INF_PLATFORM_SIZE = Vector3.new(24, 2, 24)
+local INF_PLATFORM_TRANSPARENCY = 10
+
+local function stopInfinitePlatformFollow()
+	if infinitePlatformConn then
+		infinitePlatformConn:Disconnect()
+		infinitePlatformConn = nil
+	end
+end
+
+local function toggleInfinitePlatform(forceState)
+	local lp = LocalPlayer or game:GetService("Players").LocalPlayer
+	local targetState = (type(forceState) == "boolean") and forceState or (not infinitePlatformEnabled)
+
+	if not targetState then
+		stopInfinitePlatformFollow()
+		if infinitePlatformPart and infinitePlatformPart.Parent then
+			infinitePlatformPart:Destroy()
+			infinitePlatformPart = nil
+		end
+
+		infinitePlatformEnabled = false
+		if type(config) == "table" then
+			config.infinitePlatformEnabled = false
+			if type(autoSaveConfig) == "function" then
+				pcall(autoSaveConfig)
+			end
+		end
+		if type(Message) == "function" then
+			pcall(function()
+				Message("Nền vô hạn", "Đã tắt nền vô hạn", 2)
+			end)
+		end
+	else
+		stopInfinitePlatformFollow()
+		if infinitePlatformPart and infinitePlatformPart.Parent then
+			infinitePlatformPart:Destroy()
+		end
+
+		infinitePlatformPart = Instance.new("Part")
+		infinitePlatformPart.Name = "InfiniteFollowPlatform"
+		infinitePlatformPart.Anchored = true
+		infinitePlatformPart.Size = INF_PLATFORM_SIZE
+		infinitePlatformPart.Color = Color3.fromRGB(255, 255, 255)
+		infinitePlatformPart.Transparency = INF_PLATFORM_TRANSPARENCY
+		infinitePlatformPart.Material = Enum.Material.SmoothPlastic
+		infinitePlatformPart.Parent = workspace
+
+		local char = lp and lp.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			infinitePlatformPart.Position = Vector3.new(hrp.Position.X, INF_PLATFORM_Y, hrp.Position.Z)
+		else
+			infinitePlatformPart.Position = Vector3.new(0, INF_PLATFORM_Y, 0)
+		end
+
+		infinitePlatformConn = RunService.Heartbeat:Connect(function()
+			if not infinitePlatformEnabled or not infinitePlatformPart or not infinitePlatformPart.Parent then
+				return
+			end
+			local curPlr = LocalPlayer or game:GetService("Players").LocalPlayer
+			local curChar = curPlr and curPlr.Character
+			local curHrp = curChar and curChar:FindFirstChild("HumanoidRootPart")
+			if curHrp then
+				infinitePlatformPart.Position = Vector3.new(curHrp.Position.X, INF_PLATFORM_Y, curHrp.Position.Z)
+			end
+		end)
+
+		infinitePlatformEnabled = true
+		if type(config) == "table" then
+			config.infinitePlatformEnabled = true
+			if type(autoSaveConfig) == "function" then
+				pcall(autoSaveConfig)
+			end
+		end
+		if type(Message) == "function" then
+			pcall(function()
+				Message("Nền vô hạn", "Đã bật nền vô hạn (Y = 0)", 2)
+			end)
+		end
+	end
+end-- 其他子菜单
 local otherSection = mainUI:NewSection("Khác")
 otherSection:CreateToggle("Tạo nền", function(enabled)
-    togglePlatform()
+    togglePlatform(enabled)
+end)
+
+otherSection:CreateToggle("Nền vô hạn", function(enabled)
+    toggleInfinitePlatform(enabled)
 end)
 otherSection:CreateToggle("Ẩn bản đồ", function(enabled)
     toggleMap()
