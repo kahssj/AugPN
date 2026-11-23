@@ -10,21 +10,6 @@ local UserInputService = game:GetService("UserInputService")
 local whitelist = {
     -- 白名单用户列表
    "Kedada001",
-    "zero456127",
-    "lyk19940612",
-    "lvy56646269",
-    "Trip0702",
-    "wsak59",
-    "fungfungchu0409",
-    "yigub1",
-    "Yingyicarol",
-    "Mayby886",
-    "lIIlIlllIIllIIllIIII",
-    "2223301118du",
-    "mimi0425111",
-    "das8836",
-    "alulu00123",
-    "iknu2_5",
     "nnphxn",
     "phgn306",
     "fighthebunny",
@@ -37,7 +22,6 @@ local whitelist = {
 "BroknAngels6",
 "Robloxianj8v8q3i6g",
 "N_mp666"
-
 }
 -- 检查用户是否在白名单中
 local function isWhitelisted(player)
