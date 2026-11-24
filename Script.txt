@@ -1,3 +1,4 @@
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
@@ -334,7 +335,8 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 -- 设置配置文件路径
 configPath = LocalPlayer.Name .. "_chi_chi_world_config.json"
 
--- ===================== BẢNG XẾP HẠNG SIZE NGƯỜI CHƠI (THỜI GIAN THỰC) =====================
+
+-- ======== BẢNG XẾP HẠNG SIZE NGƯỜI CHƠI (THỜI GIAN THỰC) ===========
 local function formatNumberWithCommas(num)
 	local n = tonumber(num) or 0
 	local isNegative = n < 0
@@ -368,7 +370,7 @@ local function getPlayerSizeValue(player)
 	-- 2. Kiểm tra Attribute trên Player hoặc Character
 	local attrSize = player:GetAttribute("Size") or player:GetAttribute("size")
 	if attrSize == nil and player.Character then
-		attrSize = player.Character:GetAttribute("Size") or player:GetAttribute("size")
+		attrSize = player.Character:GetAttribute("Size") or player.Character:GetAttribute("size")
 	end
 	if attrSize ~= nil then
 		return tonumber(attrSize) or 0
@@ -383,57 +385,67 @@ local function getPlayerSizeValue(player)
 	return 0
 end
 
-local function makeDraggable(guiObject, dragHandle)
-	dragHandle = dragHandle or guiObject
-	local dragging = false
-	local dragInput = nil
-	local dragStart = nil
-	local startPos = nil
-
-	dragHandle.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			dragStart = input.Position
-			startPos = guiObject.Position
-
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
-					dragging = false
-				end
-			end)
+local function getLeaderboardParent()
+	local guiParent = nil
+	pcall(function()
+		if CoreGui and CoreGui.Parent then
+			guiParent = CoreGui
 		end
 	end)
-
-	dragHandle.InputChanged:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-			dragInput = input
-		end
-	end)
-
-	UserInputService.InputChanged:Connect(function(input)
-		if dragging and input == dragInput then
-			local delta = input.Position - dragStart
-			guiObject.Position = UDim2.new(
-				startPos.X.Scale,
-				startPos.X.Offset + delta.X,
-				startPos.Y.Scale,
-				startPos.Y.Offset + delta.Y
-			)
-		end
-	end)
+	if not guiParent and LocalPlayer then
+		guiParent = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 5)
+	end
+	return guiParent
 end
 
-local function createSizeLeaderboard()
-	local oldGui = CoreGui:FindFirstChild("PlayerSizeLeaderboardGui")
-	if oldGui then
-		oldGui:Destroy()
+local function cleanupDuplicateLeaderboards()
+	local targets = {CoreGui}
+	if LocalPlayer then
+		local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+		if pg then
+			table.insert(targets, pg)
+		end
 	end
+	pcall(function()
+		if gethui then
+			local h = gethui()
+			if h then
+				table.insert(targets, h)
+			end
+		end
+	end)
+
+	for _, container in ipairs(targets) do
+		for _, child in ipairs(container:GetChildren()) do
+			if child.Name == "PlayerSizeLeaderboardGui" then
+				pcall(function()
+					child:Destroy()
+				end)
+			end
+		end
+	end
+end
+
+local sizeLeaderboardRunning = false
+
+local function createSizeLeaderboard()
+	cleanupDuplicateLeaderboards()
+
+	local parentGui = getLeaderboardParent()
+	if not parentGui then return end
+
+	sizeLeaderboardRunning = true
+
+	local darkBgColor = Color3.fromRGB(32, 30, 30)
+	local darkBorderColor = Color3.fromRGB(95, 90, 90)
+	local dividerColor = Color3.fromRGB(115, 110, 110)
+	local lightTextColor = Color3.fromRGB(232, 232, 238)
 
 	local screenGui = Instance.new("ScreenGui")
 	screenGui.Name = "PlayerSizeLeaderboardGui"
 	screenGui.ResetOnSpawn = false
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	screenGui.Parent = CoreGui
+	screenGui.Parent = parentGui
 
 	local ROW_HEIGHT = 20
 	local MAX_VISIBLE_ROWS = 6
@@ -441,17 +453,20 @@ local function createSizeLeaderboard()
 	local PADDING = 5
 	local listMaxHeight = ROW_HEIGHT * MAX_VISIBLE_ROWS
 
-	-- Nút Bật / Tắt bảng xếp hạng (màu xám nhạt, cỡ chữ 10, kéo di chuyển được)
+	local isPinned = false
+
+	-- Nút Bật / Tắt bảng xếp hạng (kéo di chuyển được khi chưa ghim)
 	local toggleButton = Instance.new("TextButton")
 	toggleButton.Name = "ToggleLeaderboardButton"
 	toggleButton.Size = UDim2.new(0, 96, 0, 22)
 	toggleButton.Position = UDim2.new(1, -330, 0.5, -100)
-	toggleButton.BackgroundColor3 = Color3.fromRGB(225, 225, 230)
+	toggleButton.BackgroundColor3 = darkBgColor
+	toggleButton.BackgroundTransparency = 0.25
 	toggleButton.BorderSizePixel = 0
-	toggleButton.Text = "BXH Size: Bật"
+	toggleButton.Text = "Rank Size: On"
 	toggleButton.Font = Enum.Font.SourceSansBold
 	toggleButton.TextSize = 10
-	toggleButton.TextColor3 = Color3.fromRGB(35, 35, 40)
+	toggleButton.TextColor3 = lightTextColor
 	toggleButton.Parent = screenGui
 
 	local toggleCorner = Instance.new("UICorner")
@@ -459,17 +474,20 @@ local function createSizeLeaderboard()
 	toggleCorner.Parent = toggleButton
 
 	local toggleStroke = Instance.new("UIStroke")
-	toggleStroke.Color = Color3.fromRGB(175, 175, 185)
+	toggleStroke.Color = darkBorderColor
+	toggleStroke.Transparency = 0.35
 	toggleStroke.Thickness = 1
 	toggleStroke.Parent = toggleButton
 
-	-- Khung bảng xếp hạng chính (màu xám nhạt, cỡ chữ 10)
+	-- Khung bảng xếp hạng chính
 	local mainFrame = Instance.new("Frame")
 	mainFrame.Name = "SizeLeaderboardFrame"
 	mainFrame.Size = UDim2.new(0, 215, 0, HEADER_HEIGHT + listMaxHeight + PADDING * 2)
 	mainFrame.Position = UDim2.new(1, -230, 0.5, -100)
-	mainFrame.BackgroundColor3 = Color3.fromRGB(225, 225, 230)
+	mainFrame.BackgroundColor3 = darkBgColor
+	mainFrame.BackgroundTransparency = 0.25
 	mainFrame.BorderSizePixel = 0
+	mainFrame.ClipsDescendants = false
 	mainFrame.Visible = true
 	mainFrame.Parent = screenGui
 
@@ -478,11 +496,37 @@ local function createSizeLeaderboard()
 	frameCorner.Parent = mainFrame
 
 	local frameStroke = Instance.new("UIStroke")
-	frameStroke.Color = Color3.fromRGB(175, 175, 185)
+	frameStroke.Color = darkBorderColor
+	frameStroke.Transparency = 0.35
 	frameStroke.Thickness = 1
 	frameStroke.Parent = mainFrame
 
-	-- Thanh tiêu đề (kéo thanh này để di chuyển toàn bộ bảng)
+	-- Ô vuông nhỏ ở góc trên bên trái để ghim / mở khóa vị trí bảng
+	local pinBox = Instance.new("TextButton")
+	pinBox.Name = "PinLeaderboardBox"
+	pinBox.Size = UDim2.fromOffset(18, 18)
+	pinBox.Position = UDim2.fromOffset(-5, -5)
+	pinBox.BackgroundColor3 = Color3.fromRGB(52, 50, 52)
+	pinBox.BackgroundTransparency = 0.1
+	pinBox.BorderSizePixel = 0
+	pinBox.AutoButtonColor = false
+	pinBox.Text = "🔓"
+	pinBox.Font = Enum.Font.GothamBold
+	pinBox.TextSize = 10
+	pinBox.TextColor3 = lightTextColor
+	pinBox.ZIndex = 10
+	pinBox.Parent = mainFrame
+
+	local pinCorner = Instance.new("UICorner")
+	pinCorner.CornerRadius = UDim.new(0, 4)
+	pinCorner.Parent = pinBox
+
+	local pinStroke = Instance.new("UIStroke")
+	pinStroke.Color = darkBorderColor
+	pinStroke.Thickness = 1
+	pinStroke.Parent = pinBox
+
+	-- Thanh tiêu đề (kéo thanh này để di chuyển toàn bộ bảng khi chưa ghim)
 	local headerBar = Instance.new("Frame")
 	headerBar.Name = "HeaderBar"
 	headerBar.Size = UDim2.new(1, -10, 0, HEADER_HEIGHT)
@@ -495,10 +539,10 @@ local function createSizeLeaderboard()
 	titleLabel.Size = UDim2.new(1, -24, 1, 0)
 	titleLabel.Position = UDim2.new(0, 0, 0, 0)
 	titleLabel.BackgroundTransparency = 1
-	titleLabel.Text = "BXH Size Người Chơi"
+	titleLabel.Text = "Rank"
 	titleLabel.Font = Enum.Font.SourceSansBold
 	titleLabel.TextSize = 14
-	titleLabel.TextColor3 = Color3.fromRGB(35, 35, 40)
+	titleLabel.TextColor3 = lightTextColor
 	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 	titleLabel.Parent = headerBar
 
@@ -507,12 +551,13 @@ local function createSizeLeaderboard()
 	quickCloseBtn.Name = "QuickCloseBtn"
 	quickCloseBtn.Size = UDim2.new(0, 18, 0, 16)
 	quickCloseBtn.Position = UDim2.new(1, -18, 0.5, -8)
-	quickCloseBtn.BackgroundColor3 = Color3.fromRGB(205, 205, 212)
+	quickCloseBtn.BackgroundColor3 = Color3.fromRGB(48, 45, 45)
+	quickCloseBtn.BackgroundTransparency = 0.3
 	quickCloseBtn.BorderSizePixel = 0
 	quickCloseBtn.Text = "X"
 	quickCloseBtn.Font = Enum.Font.SourceSansBold
 	quickCloseBtn.TextSize = 16
-	quickCloseBtn.TextColor3 = Color3.fromRGB(40, 40, 45)
+	quickCloseBtn.TextColor3 = lightTextColor
 	quickCloseBtn.Parent = headerBar
 
 	local closeBtnCorner = Instance.new("UICorner")
@@ -524,55 +569,180 @@ local function createSizeLeaderboard()
 	scrollFrame.Name = "RowsScrollFrame"
 	scrollFrame.Size = UDim2.new(1, -10, 0, listMaxHeight)
 	scrollFrame.Position = UDim2.new(0, 5, 0, HEADER_HEIGHT + 3)
-	scrollFrame.BackgroundColor3 = Color3.fromRGB(236, 236, 241)
+	scrollFrame.BackgroundTransparency = 1
 	scrollFrame.BorderSizePixel = 0
 	scrollFrame.ScrollBarThickness = 4
-	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(135, 135, 145)
+	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(140, 140, 145)
 	scrollFrame.ScrollingEnabled = false
 	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 	scrollFrame.Parent = mainFrame
-
-	local scrollCorner = Instance.new("UICorner")
-	scrollCorner.CornerRadius = UDim.new(0, 4)
-	scrollCorner.Parent = scrollFrame
 
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout.Padding = UDim.new(0, 0)
 	listLayout.Parent = scrollFrame
 
-	-- Đồng bộ trạng thái Bật / Tắt
 	local function setLeaderboardVisible(state)
 		mainFrame.Visible = state
 		if state then
-			toggleButton.Text = "BXH Size: Bật"
-			toggleButton.BackgroundColor3 = Color3.fromRGB(225, 225, 230)
+			toggleButton.Text = "Rank Size: On"
+			toggleButton.BackgroundColor3 = darkBgColor
 		else
-			toggleButton.Text = "BXH Size: Tắt"
-			toggleButton.BackgroundColor3 = Color3.fromRGB(205, 205, 212)
+			toggleButton.Text = "Rank Size: Off"
+			toggleButton.BackgroundColor3 = Color3.fromRGB(48, 45, 45)
 		end
 	end
-
-	toggleButton.MouseButton1Click:Connect(function()
-		setLeaderboardVisible(not mainFrame.Visible)
-	end)
 
 	quickCloseBtn.MouseButton1Click:Connect(function()
 		setLeaderboardVisible(false)
 	end)
 
-	-- Cho phép kéo di chuyển cả bảng lẫn nút bật/tắt
-	makeDraggable(mainFrame, headerBar)
-	makeDraggable(toggleButton, toggleButton)
+	-- Kéo di chuyển có hỗ trợ ghim vị trí
+	local function bindDraggable(guiObject, dragHandle, canDragFn)
+		local dragging = false
+		local dragInput = nil
+		local dragStart = nil
+		local startPos = nil
+		local moved = false
+
+		dragHandle.InputBegan:Connect(function(input)
+			if canDragFn and not canDragFn() then return end
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = true
+				moved = false
+				dragStart = input.Position
+				startPos = guiObject.Position
+
+				input.Changed:Connect(function()
+					if input.UserInputState == Enum.UserInputState.End then
+						dragging = false
+					end
+				end)
+			end
+		end)
+
+		dragHandle.InputChanged:Connect(function(input)
+			if canDragFn and not canDragFn() then return end
+			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+				dragInput = input
+			end
+		end)
+
+		UserInputService.InputChanged:Connect(function(input)
+			if dragging and input == dragInput then
+				if canDragFn and not canDragFn() then
+					dragging = false
+					return
+				end
+				local delta = input.Position - dragStart
+				guiObject.Position = UDim2.new(
+					startPos.X.Scale,
+					startPos.X.Offset + delta.X,
+					startPos.Y.Scale,
+					startPos.Y.Offset + delta.Y
+				)
+				if delta.Magnitude > 5 then
+					moved = true
+				end
+			end
+		end)
+
+		return function()
+			local wasMoved = moved
+			moved = false
+			return wasMoved
+		end
+	end
+
+	local function syncPinVisual()
+		if isPinned then
+			pinBox.Text = "📌"
+			pinBox.BackgroundColor3 = Color3.fromRGB(70, 165, 95)
+			pinStroke.Color = Color3.fromRGB(190, 255, 210)
+		else
+			pinBox.Text = "🔓"
+			pinBox.BackgroundColor3 = Color3.fromRGB(52, 50, 52)
+			pinStroke.Color = darkBorderColor
+		end
+	end
+
+	pinBox.MouseButton1Click:Connect(function()
+		isPinned = not isPinned
+		syncPinVisual()
+	end)
+
+	local consumeToggleMoved = bindDraggable(toggleButton, toggleButton, function()
+		return not isPinned
+	end)
+	bindDraggable(mainFrame, headerBar, function()
+		return not isPinned
+	end)
+
+	toggleButton.MouseButton1Click:Connect(function()
+		if not isPinned and consumeToggleMoved() then
+			return
+		end
+		setLeaderboardVisible(not mainFrame.Visible)
+	end)
+
+	-- Tái sử dụng hàng để tránh chớp / sọc khi cập nhật
+	local rowPool = {}
+
+	local function getOrCreateRow(idx)
+		if rowPool[idx] then
+			return rowPool[idx]
+		end
+
+		local row = Instance.new("Frame")
+		row.Name = "Row_" .. tostring(idx)
+		row.Size = UDim2.new(1, 0, 0, ROW_HEIGHT)
+		row.LayoutOrder = idx
+		row.BackgroundTransparency = 1
+		row.BorderSizePixel = 0
+		row.Parent = scrollFrame
+
+		local nameLabel = Instance.new("TextLabel")
+		nameLabel.Name = "NameLabel"
+		nameLabel.Size = UDim2.new(0.56, -5, 1, 0)
+		nameLabel.Position = UDim2.new(0, 5, 0, 0)
+		nameLabel.BackgroundTransparency = 1
+		nameLabel.Font = Enum.Font.SourceSans
+		nameLabel.TextSize = 15
+		nameLabel.TextColor3 = lightTextColor
+		nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+		nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+		nameLabel.Parent = row
+
+		local sizeLabel = Instance.new("TextLabel")
+		sizeLabel.Name = "SizeLabel"
+		sizeLabel.Size = UDim2.new(0.44, -5, 1, 0)
+		sizeLabel.Position = UDim2.new(0.56, 0, 0, 0)
+		sizeLabel.BackgroundTransparency = 1
+		sizeLabel.Font = Enum.Font.SourceSansBold
+		sizeLabel.TextSize = 15
+		sizeLabel.TextColor3 = lightTextColor
+		sizeLabel.TextXAlignment = Enum.TextXAlignment.Right
+		sizeLabel.Parent = row
+
+		local divider = Instance.new("Frame")
+		divider.Name = "RowDivider"
+		divider.Size = UDim2.new(1, 0, 0, 1)
+		divider.Position = UDim2.new(0, 0, 1, -1)
+		divider.BackgroundColor3 = dividerColor
+		divider.BackgroundTransparency = 0.55
+		divider.BorderSizePixel = 0
+		divider.Parent = row
+
+		rowPool[idx] = {
+			Frame = row,
+			NameLabel = nameLabel,
+			SizeLabel = sizeLabel
+		}
+		return rowPool[idx]
+	end
 
 	local function refreshLeaderboard()
 		if not mainFrame.Visible then return end
-
-		for _, child in ipairs(scrollFrame:GetChildren()) do
-			if child:IsA("Frame") then
-				child:Destroy()
-			end
-		end
 
 		local entries = {}
 		for _, plr in ipairs(Players:GetPlayers()) do
@@ -594,143 +764,38 @@ local function createSizeLeaderboard()
 		scrollFrame.ScrollingEnabled = totalRows > MAX_VISIBLE_ROWS
 
 		for idx, item in ipairs(entries) do
-			local row = Instance.new("Frame")
-			row.Name = "Row_" .. item.Name
-			row.Size = UDim2.new(1, 0, 0, ROW_HEIGHT)
-			row.LayoutOrder = idx
-			row.BackgroundColor3 = (idx % 2 == 0) and Color3.fromRGB(228, 228, 234) or Color3.fromRGB(238, 238, 243)
-			row.BorderSizePixel = 0
-			row.Parent = scrollFrame
+			local rowObj = getOrCreateRow(idx)
+			rowObj.Frame.Visible = true
+			rowObj.Frame.LayoutOrder = idx
+			rowObj.NameLabel.Text = string.format("#%d %s", idx, item.Name)
+			rowObj.SizeLabel.Text = formatNumberWithCommas(item.SizeVal)
+		end
 
-			local nameLabel = Instance.new("TextLabel")
-			nameLabel.Size = UDim2.new(0.56, -5, 1, 0)
-			nameLabel.Position = UDim2.new(0, 5, 0, 0)
-			nameLabel.BackgroundTransparency = 1
-			nameLabel.Text = string.format("#%d %s", idx, item.Name)
-			nameLabel.Font = Enum.Font.SourceSans
-			nameLabel.TextSize = 15
-			nameLabel.TextColor3 = Color3.fromRGB(35, 35, 40)
-			nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-			nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
-			nameLabel.Parent = row
-
-			local sizeLabel = Instance.new("TextLabel")
-			sizeLabel.Size = UDim2.new(0.44, -5, 1, 0)
-			sizeLabel.Position = UDim2.new(0.56, 0, 0, 0)
-			sizeLabel.BackgroundTransparency = 1
-			sizeLabel.Text = formatNumberWithCommas(item.SizeVal)
-			sizeLabel.Font = Enum.Font.SourceSansBold
-			sizeLabel.TextSize = 15
-			sizeLabel.TextColor3 = Color3.fromRGB(45, 45, 55)
-			sizeLabel.TextXAlignment = Enum.TextXAlignment.Right
-			sizeLabel.Parent = row
+		for i = totalRows + 1, #rowPool do
+			if rowPool[i] and rowPool[i].Frame then
+				rowPool[i].Frame.Visible = false
+			end
 		end
 	end
 
+	screenGui.AncestryChanged:Connect(function(_, parent)
+		if not parent then
+			sizeLeaderboardRunning = false
+		end
+	end)
+
+	syncPinVisual()
+	refreshLeaderboard()
+
 	task.spawn(function()
-		while screenGui.Parent do
+		while sizeLeaderboardRunning and screenGui.Parent do
 			refreshLeaderboard()
-			task.wait(0.25)
+			task.wait(0.35)
 		end
 	end)
 end
 
-createSizeLeaderboard()
--- ===================== ÁP DỤNG MÀU BẢNG GIỐNG HÌNH =====================
-local function applyDarkLeaderboardTheme()
-	local gui = CoreGui:FindFirstChild("PlayerSizeLeaderboardGui")
-	if not gui then return end
-
-	local toggleBtn = gui:FindFirstChild("ToggleLeaderboardButton")
-	local mainFrame = gui:FindFirstChild("SizeLeaderboardFrame")
-	local headerBar = mainFrame and mainFrame:FindFirstChild("HeaderBar")
-	local titleLabel = headerBar and headerBar:FindFirstChild("TitleLabel")
-	local quickCloseBtn = headerBar and headerBar:FindFirstChild("QuickCloseBtn")
-	local scrollFrame = mainFrame and mainFrame:FindFirstChild("RowsScrollFrame")
-
-	local darkBgColor = Color3.fromRGB(32, 30, 30)
-	local darkBorderColor = Color3.fromRGB(95, 90, 90)
-	local dividerColor = Color3.fromRGB(115, 110, 110)
-	local lightTextColor = Color3.fromRGB(232, 232, 238)
-
-	if toggleBtn then
-		toggleBtn.BackgroundColor3 = darkBgColor
-		toggleBtn.BackgroundTransparency = 0.25
-		toggleBtn.TextColor3 = lightTextColor
-		local tStroke = toggleBtn:FindFirstChildOfClass("UIStroke")
-		if tStroke then
-			tStroke.Color = darkBorderColor
-			tStroke.Transparency = 0.35
-		end
-	end
-
-	if mainFrame then
-		mainFrame.BackgroundColor3 = darkBgColor
-		mainFrame.BackgroundTransparency = 0.25
-		local mStroke = mainFrame:FindFirstChildOfClass("UIStroke")
-		if mStroke then
-			mStroke.Color = darkBorderColor
-			mStroke.Transparency = 0.35
-		end
-	end
-
-	if titleLabel then
-		titleLabel.TextColor3 = lightTextColor
-	end
-
-	if quickCloseBtn then
-		quickCloseBtn.BackgroundColor3 = Color3.fromRGB(48, 45, 45)
-		quickCloseBtn.BackgroundTransparency = 0.3
-		quickCloseBtn.TextColor3 = lightTextColor
-	end
-
-	if scrollFrame then
-		scrollFrame.BackgroundTransparency = 1
-		scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(140, 140, 145)
-
-		local function styleRow(row)
-			if not row:IsA("Frame") then return end
-			row.BackgroundTransparency = 1
-
-			for _, child in ipairs(row:GetChildren()) do
-				if child:IsA("TextLabel") then
-					child.TextColor3 = lightTextColor
-				end
-			end
-
-			if not row:FindFirstChild("RowDivider") then
-				local divider = Instance.new("Frame")
-				divider.Name = "RowDivider"
-				divider.Size = UDim2.new(1, 0, 0, 1)
-				divider.Position = UDim2.new(0, 0, 1, -1)
-				divider.BackgroundColor3 = dividerColor
-				divider.BackgroundTransparency = 0.55
-				divider.BorderSizePixel = 0
-				divider.Parent = row
-			end
-		end
-
-		for _, child in ipairs(scrollFrame:GetChildren()) do
-			styleRow(child)
-		end
-
-		if not scrollFrame:GetAttribute("ThemeHooked") then
-			scrollFrame:SetAttribute("ThemeHooked", true)
-			scrollFrame.ChildAdded:Connect(function(child)
-				task.wait()
-				styleRow(child)
-			end)
-		end
-	end
-end
-
-task.spawn(function()
-	while CoreGui:FindFirstChild("PlayerSizeLeaderboardGui") do
-		applyDarkLeaderboardTheme()
-		task.wait(0.25)
-	end
-end)
--- ===================== 配置管理 =====================
+createSizeLeaderboard()-- ===================== 配置管理 =====================
 local config = {
     -- 自动功能
     autofarm = false,
@@ -3825,6 +3890,10 @@ local function CreateSpeedUI()
     local textLightColor = Color3.fromRGB(232, 232, 238)
     local subTextColor = Color3.fromRGB(195, 195, 202)
 
+    local fullSize = UDim2.new(0, 218, 0, 140)
+    local collapsedSize = UDim2.new(0, 218, 0, 40)
+    local isCollapsed = false
+
     local XenoUI = Instance.new("ScreenGui")
     XenoUI.Name = "XenoSpeedHax_CR"
     XenoUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -3836,10 +3905,11 @@ local function CreateSpeedUI()
     MainFrame.BackgroundColor3 = darkBgColor
     MainFrame.BackgroundTransparency = 0.25
     MainFrame.BorderSizePixel = 0
-    MainFrame.Size = UDim2.new(0, 218, 0, 140)
+    MainFrame.Size = fullSize
     MainFrame.Position = UDim2.new(0.5, -210, 0.5, -120)
     MainFrame.Active = true
     MainFrame.Draggable = true
+    MainFrame.ClipsDescendants = true
     MainFrame.Parent = XenoUI
 
     local corner = Instance.new("UICorner")
@@ -3860,7 +3930,7 @@ local function CreateSpeedUI()
     TitleBar.Parent = MainFrame
 
     local TitleText = Instance.new("TextLabel")
-    TitleText.Size = UDim2.new(1, -40, 1, 0)
+    TitleText.Size = UDim2.new(1, -80, 1, 0)
     TitleText.Position = UDim2.new(0, 10, 0, 0)
     TitleText.BackgroundTransparency = 1
     TitleText.Text = "Speed"
@@ -3869,6 +3939,28 @@ local function CreateSpeedUI()
     TitleText.TextColor3 = textLightColor
     TitleText.TextXAlignment = Enum.TextXAlignment.Left
     TitleText.Parent = TitleBar
+
+    local ContentFrame = Instance.new("Frame")
+    ContentFrame.Size = UDim2.new(1, -20, 1, -50)
+    ContentFrame.Position = UDim2.new(0, 10, 0, 44)
+    ContentFrame.BackgroundTransparency = 1
+    ContentFrame.Parent = MainFrame
+
+    local MinimizeBtn = Instance.new("TextButton")
+    MinimizeBtn.Text = "-"
+    MinimizeBtn.TextSize = 20
+    MinimizeBtn.Font = Enum.Font.SourceSansBold
+    MinimizeBtn.TextColor3 = subTextColor
+    MinimizeBtn.BackgroundTransparency = 1
+    MinimizeBtn.Size = UDim2.new(0, 36, 1, 0)
+    MinimizeBtn.Position = UDim2.new(1, -76, 0, 0)
+    MinimizeBtn.Parent = TitleBar
+    MinimizeBtn.MouseButton1Click:Connect(function()
+        isCollapsed = not isCollapsed
+        ContentFrame.Visible = not isCollapsed
+        MainFrame.Size = isCollapsed and collapsedSize or fullSize
+        MinimizeBtn.Text = isCollapsed and "+" or "-"
+    end)
 
     local CloseBtn = Instance.new("TextButton")
     CloseBtn.Text = "×"
@@ -3882,13 +3974,7 @@ local function CreateSpeedUI()
         XenoUI.Enabled = not XenoUI.Enabled
     end)
 
-    local ContentFrame = Instance.new("Frame")
-    ContentFrame.Size = UDim2.new(1, -20, 1, -50)
-    ContentFrame.Position = UDim2.new(0, 10, 0, 44)
-    ContentFrame.BackgroundTransparency = 1
-    ContentFrame.Parent = MainFrame
-
-    -- Khung cuộn: cao 90px để hiển thị các hàng tốc độ và kéo bằng thanh cuộn
+    -- Khung cuộn: cao 86px để hiển thị các hàng tốc độ và kéo bằng thanh cuộn
     local ScrollFrame = Instance.new("ScrollingFrame")
     ScrollFrame.Size = UDim2.new(1, 0, 0, 86)
     ScrollFrame.Position = UDim2.new(0, 0, 0, 0)
@@ -4023,7 +4109,8 @@ local function ToggleSpeedUI()
     end
     SpeedUI.Enabled = not SpeedUI.Enabled
     local status = SpeedUI.Enabled and "Mở" or "Đóng"
-end-- 取消锚固
+end
+-- 取消锚固
 local function cancelAnchored()
     local character = LocalPlayer.Character
     if character then
@@ -7398,7 +7485,7 @@ figureSection:CreateToggle("Gravity", function(enabled)
     autoSaveConfig()
 end)
 
-figureSection:CreateToggle("Va chạm người chơi", function(enabled)
+figureSection:CreateToggle("Không xuyên", function(enabled)
     togglePlayerCollision(enabled)
 end)
 figureSection:CreateToggle("Kill", function(enabled)
@@ -8164,6 +8251,8 @@ local function CreateGrabUI()
     btn.Font = Enum.Font.GothamBold
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Active = true
+    btn.ClipsDescendants = false
+    btn.ZIndex = 2
     btn.Parent = gui
 
     local corner = Instance.new("UICorner")
@@ -8175,24 +8264,71 @@ local function CreateGrabUI()
     stroke.Thickness = 2
     stroke.Parent = btn
 
+    -- Ô vuông nhỏ ở góc trên bên trái để ghim / mở khóa vị trí nút
+    local isPinned = false
+
+    local pinBox = Instance.new("TextButton")
+    pinBox.Name = "pinSquare"
+    pinBox.Size = UDim2.fromOffset(22, 22)
+    pinBox.Position = UDim2.fromOffset(-6, -6)
+    pinBox.BackgroundColor3 = Color3.fromRGB(55, 58, 72)
+    pinBox.BackgroundTransparency = 0
+    pinBox.BorderSizePixel = 0
+    pinBox.AutoButtonColor = false
+    pinBox.Text = "🔓"
+    pinBox.TextSize = 12
+    pinBox.Font = Enum.Font.GothamBold
+    pinBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    pinBox.ZIndex = 10
+    pinBox.Parent = btn
+
+    local pinCorner = Instance.new("UICorner")
+    pinCorner.CornerRadius = UDim.new(0, 5)
+    pinCorner.Parent = pinBox
+
+    local pinStroke = Instance.new("UIStroke")
+    pinStroke.Color = Color3.fromRGB(220, 225, 245)
+    pinStroke.Thickness = 1.5
+    pinStroke.Parent = pinBox
+
     local conns = {}
     local moved = false
+    local dragging = false
+    local dragStart, startPos
 
-    -- 点击执行一次抓取（拖动不算点击）
+    local function updatePinState()
+        if isPinned then
+            dragging = false
+            moved = false
+            pinBox.Text = "📌"
+            pinBox.BackgroundColor3 = Color3.fromRGB(70, 200, 120)
+            pinStroke.Color = Color3.fromRGB(210, 255, 225)
+        else
+            pinBox.Text = "🔓"
+            pinBox.BackgroundColor3 = Color3.fromRGB(55, 58, 72)
+            pinStroke.Color = Color3.fromRGB(220, 225, 245)
+        end
+    end
+
+    table.insert(conns, pinBox.MouseButton1Click:Connect(function()
+        isPinned = not isPinned
+        updatePinState()
+    end))
+
+    -- 点击执行一次抓取（拖动不算点击； đã ghim thì luôn cho phép bấm）
     table.insert(conns, btn.MouseButton1Click:Connect(function()
-        if moved then
+        if not isPinned and moved then
             moved = false
             return
         end
+        moved = false
         grabPlayerNonStop()
         Message("Tự động bắt", "Đã thực hiện thao tác kéo", 2)
     end))
 
-    -- 拖动逻辑
-    local dragging = false
-    local dragStart, startPos
-
+    -- 拖动逻辑（chỉ kéo khi chưa ghim）
     table.insert(conns, btn.InputBegan:Connect(function(input)
+        if isPinned then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
@@ -8203,7 +8339,7 @@ local function CreateGrabUI()
     end))
 
     table.insert(conns, UserInputService.InputChanged:Connect(function(input)
-        if not dragging then return end
+        if not dragging or isPinned then return end
         if input.UserInputType == Enum.UserInputType.MouseMovement
         or input.UserInputType == Enum.UserInputType.Touch then
             local delta = input.Position - dragStart
@@ -8231,6 +8367,7 @@ local function CreateGrabUI()
         conns = {}
     end)
 
+    updatePinState()
     grabUI = gui
     return gui
 end
