@@ -747,7 +747,7 @@ local function createSizeLeaderboard()
 		local entries = {}
 		for _, plr in ipairs(Players:GetPlayers()) do
 			table.insert(entries, {
-				Name = plr.Name,
+				Name = plr.DisplayName,
 				SizeVal = getPlayerSizeValue(plr)
 			})
 		end
@@ -5680,7 +5680,7 @@ local function buildTeleportPlayerListUI(config)
         local isPinned = pinnedTeleportUsers[plr.UserId] == true
 
         local rowFrame = Instance.new("Frame")
-        rowFrame.Name = plr.Name
+        rowFrame.Name = plr.DisplayName
         rowFrame.Parent = parent
         rowFrame.LayoutOrder = layoutOrder
         rowFrame.BackgroundColor3 = rowBgColor
@@ -5731,7 +5731,7 @@ local function buildTeleportPlayerListUI(config)
         playerbutton.Position = UDim2.new(0, 32, 0, 0)
         playerbutton.Size = UDim2.new(1, -36, 1, 0)
         playerbutton.Font = isPinned and Enum.Font.SourceSansBold or Enum.Font.SourceSans
-        local displayLabel = plr.Name
+        local displayLabel = plr.DisplayName
         if plr.Name ~= plr.DisplayName then
             displayLabel = displayLabel .. " (" .. plr.DisplayName .. ")"
         end
