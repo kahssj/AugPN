@@ -4762,10 +4762,10 @@ local function togglePlayerDataUI()
     if playerDataUI and playerDataUI.Parent then
         playerDataUI:Destroy()
         playerDataUI = nil
-        Message("Xem dữ liệu", "Đã đóng bảng dữ liệu", 2)
+        Message("Stat", "Đã đóng bảng dữ liệu", 2)
     else
         playerDataUI = buildPlayerDataUI()
-        Message("Xem dữ liệu", "Đã mở bảng dữ liệu", 2)
+        Message("Stat", "Đã mở bảng dữ liệu", 2)
     end
 end
 -- 打滑消除
@@ -8474,10 +8474,10 @@ otherSection:CreateToggle("Stat", function(enabled)
     togglePlayerDataUI()
     -- 自动关闭开关
     for _, btn in ipairs(otherSection.Buttons) do
-        if btn.Name == "ToggleBtn_Xem dữ liệu" then
+        if btn.Name == "ToggleBtn_Stat" then
             local stateLabel = btn:FindFirstChildOfClass("TextLabel")
             if stateLabel then
-                stateLabel.Text = "Xem dữ liệu"
+                stateLabel.Text = "Stat"
                 stateLabel.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
             end
             break
@@ -8741,4 +8741,3 @@ end)
 -- 初始化
 getgenv().FPDH = workspace.FallenPartsDestroyHeight
 Message("Đã tải giao diện", "Đã tải xong trợ giúp Eat the World", 3)
-
