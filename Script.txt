@@ -8470,7 +8470,7 @@ otherSection:CreateToggle("Vào lại", function(enabled)
         end
     end
 end)
-otherSection:CreateToggle("Xem dữ liệu", function(enabled)
+otherSection:CreateToggle("Stat", function(enabled)
     togglePlayerDataUI()
     -- 自动关闭开关
     for _, btn in ipairs(otherSection.Buttons) do
