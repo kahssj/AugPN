@@ -8,37 +8,20 @@ local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 -- ===================== 白名单系统 =====================
-local whitelist = {
-    -- 白名单用户列表
-   "Kedada001",
-    "zero456127",
-    "lyk19940612",
-    "lvy56646269",
-    "Trip0702",
-    "wsak59",
-    "fungfungchu0409",
-    "yigub1",
-    "Yingyicarol",
-    "Mayby886",
-    "lIIlIlllIIllIIllIIII",
-    "2223301118du",
-    "mimi0425111",
-    "das8836",
-    "alulu00123",
-    "iknu2_5",
-    "nnphxn",
-    "phgn306",
-    "fighthebunny",
-    "Laanteentaa",
-    "tkz_ht",
-    "g88714033",
-    "fathoo27",
+local whitelist = 
+{
+"Kedada001",
+"nnphxn",
+"phgn306",
+"fighthebunny",
+"Laanteentaa",
+"tkz_ht",
+"fathoo27",
 "Fatho_27",
 "i_st4yz",
 "BroknAngels6",
 "Robloxianj8v8q3i6g",
 "N_mp666"
-
 }
 -- 检查用户是否在白名单中
 local function isWhitelisted(player)
