@@ -8741,3 +8741,4 @@ end)
 -- 初始化
 getgenv().FPDH = workspace.FallenPartsDestroyHeight
 Message("Đã tải giao diện", "Đã tải xong trợ giúp Eat the World", 3)
+
