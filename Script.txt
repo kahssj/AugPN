@@ -882,7 +882,7 @@ function UI:NewWindow(title)
     self.Window.Position = UDim2.new(0.1, 0, 0.1, 0)
     self.Window.BackgroundTransparency = 1
     self.Window.BorderSizePixel = 0
-    self.Window.ClipsDescendants = true
+    self.Window.ClipsDescendants = false
     self.Window.Parent = self.MainGui
     
     -- 窗口圆角
@@ -921,7 +921,34 @@ function UI:NewWindow(title)
     self.CollapseBtn.TextSize = 18
     self.CollapseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     self.CollapseBtn.Parent = self.TitleBar
-    
+
+-- [THÊM MỚI] Nút ghim bo góc nổi đè lên góc trên cùng bên trái của Window
+    self.IsPinned = false
+
+    self.PinBtn = Instance.new("TextButton")
+    self.PinBtn.Name = "PinBtn"
+    self.PinBtn.Size = UDim2.new(0, 26, 0, 26)
+    self.PinBtn.Position = UDim2.new(0, -6, 0, -6) -- Nhô nhẹ ra góc trên bên trái giống ảnh
+    self.PinBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+    self.PinBtn.BorderSizePixel = 0
+    self.PinBtn.Text = "🔓"
+    self.PinBtn.Font = Enum.Font.SourceSansBold
+    self.PinBtn.TextSize = 14
+    self.PinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    self.PinBtn.ZIndex = 10 -- Đảm bảo luôn nổi lên trên khung menu
+    self.PinBtn.Parent = self.Window
+
+    local pinCorner = Instance.new("UICorner")
+    pinCorner.CornerRadius = UDim.new(0, 6)
+    pinCorner.Parent = self.PinBtn
+
+    -- Đẩy nhẹ chữ tiêu đề sang phải 1 chút để không bị nút che mất chữ đầu
+    self.TitleText.Position = UDim2.new(0, 26, 0, 0)
+    self.TitleText.Size = UDim2.new(1, -68, 1, 0)
+
+    self.PinBtn.MouseButton1Click:Connect(function()
+        self:TogglePin()
+    end)
     -- 内容容器
     self.ContentContainer = Instance.new("Frame")
     self.ContentContainer.Name = "ContentContainer"
@@ -955,12 +982,24 @@ function UI:NewWindow(title)
 end
 
 -- 窗口拖拽
+-- [THÊM MỚI] Hàm bật/tắt ghim vị trí menu chính
+function UI:TogglePin()
+    self.IsPinned = not self.IsPinned
+    if self.IsPinned then
+        self.PinBtn.Text = "🔒"
+        self.PinBtn.TextColor3 = Color3.fromRGB(100, 230, 130)
+    else
+        self.PinBtn.Text = "🔓"
+        self.PinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end
+end
 function UI:MakeDraggable()
     local dragging = false
     local dragStart = Vector2.new()
     local startPos = UDim2.new()
     
     self.TitleBar.InputBegan:Connect(function(input)
+if self.IsPinned then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
@@ -970,6 +1009,7 @@ function UI:MakeDraggable()
     end)
     
     UserInputService.InputChanged:Connect(function(input)
+if self.IsPinned then dragging = false return end
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
             self.Window.Position = UDim2.new(
@@ -4109,6 +4149,8 @@ local function cancelAnchored()
 end
 -- 查看玩家数据（GUI 面板）
 local playerDataUI = nil
+local savedDataHistory = {} -- Lưu các bảng dữ liệu cũ (tối đa 100 bản: 1 -> 100)
+local MAX_SAVED_HISTORY = 100
 
 local function buildPlayerDataUI()
     -- 本地化表
@@ -4171,6 +4213,53 @@ local function buildPlayerDataUI()
         return s
     end
 
+    -- Thu thập dữ liệu hiện tại của người chơi & lưu vào lịch sử (1 -> 100)
+    local function captureCurrentSnapshot()
+        local snapshotPlayers = {}
+        for _, player in ipairs(Players:GetPlayers()) do
+            local isMe = (player == LocalPlayer)
+            local entries = {}
+            local upgrades = player:FindFirstChild("Upgrades")
+
+            if upgrades then
+                for _, upg in ipairs(upgrades:GetChildren()) do
+                    local cn = localization[upg.Name]
+                    local growth = growthFunctions[upg.Name]
+                    if cn and growth and typeof(upg.Value) == "number" then
+                        local level = upg.Value
+                        table.insert(entries, string.format(
+                            "%s: Cấp %d | Giá trị %s",
+                            cn, level, formatNumber(growth(level))
+                        ))
+                    end
+                end
+            end
+
+            table.insert(snapshotPlayers, {
+                name = player.Name .. (isMe and " (Bạn)" or ""),
+                entries = entries,
+            })
+        end
+
+        return {
+            savedAt = os.date("%H:%M:%S %d/%m/%Y"),
+            savedTimestamp = os.clock(),
+            players = snapshotPlayers,
+        }
+    end
+
+    local hasLoadedOnce = false
+    local function savePreviousDataSnapshot()
+        if not hasLoadedOnce then
+            return
+        end
+        local snap = captureCurrentSnapshot()
+        if #savedDataHistory >= MAX_SAVED_HISTORY then
+            table.remove(savedDataHistory, 1)
+        end
+        table.insert(savedDataHistory, snap)
+    end
+
     local gui = Instance.new("ScreenGui")
     gui.Name = "PlayerDataUI"
     gui.ResetOnSpawn = false
@@ -4179,7 +4268,7 @@ local function buildPlayerDataUI()
     gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
     local main = Instance.new("Frame")
-    main.Size = UDim2.fromOffset(260, 260)
+    main.Size = UDim2.fromOffset(280, 260)
     main.Position = UDim2.new(0.5, 0, 0.5, 0)
     main.AnchorPoint = Vector2.new(0.5, 0.5)
     main.BackgroundColor3 = Color3.fromRGB(28, 28, 32)
@@ -4209,23 +4298,37 @@ local function buildPlayerDataUI()
     titleCorner.Parent = titleBar
 
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -90, 1, 0)
-    title.Position = UDim2.fromOffset(12, 0)
+    title.Size = UDim2.new(1, -134, 1, 0)
+    title.Position = UDim2.fromOffset(10, 0)
     title.BackgroundTransparency = 1
     title.Font = Enum.Font.SourceSansBold
-    title.TextSize = 16
+    title.TextSize = 15
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.TextXAlignment = Enum.TextXAlignment.Left
+    title.TextTruncate = Enum.TextTruncate.AtEnd
     title.Text = "Dữ liệu người chơi"
     title.Parent = titleBar
 
+    -- Nút "Data" nằm kế nút "Làm mới"
+    local dataBtn = Instance.new("TextButton")
+    dataBtn.Name = "DataBtn"
+    dataBtn.Size = UDim2.fromOffset(38, 26)
+    dataBtn.Position = UDim2.new(1, -126, 0.5, -13)
+    dataBtn.BackgroundColor3 = Color3.fromRGB(50, 95, 145)
+    dataBtn.BorderSizePixel = 0
+    dataBtn.Font = Enum.Font.SourceSansBold
+    dataBtn.TextSize = 13
+    dataBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    dataBtn.Text = "Data"
+    dataBtn.Parent = titleBar
+
     local refreshBtn = Instance.new("TextButton")
-    refreshBtn.Size = UDim2.fromOffset(52, 26)
+    refreshBtn.Size = UDim2.fromOffset(54, 26)
     refreshBtn.Position = UDim2.new(1, -86, 0.5, -13)
     refreshBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
     refreshBtn.BorderSizePixel = 0
     refreshBtn.Font = Enum.Font.SourceSans
-    refreshBtn.TextSize = 14
+    refreshBtn.TextSize = 13
     refreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     refreshBtn.Text = "Làm mới"
     refreshBtn.Parent = titleBar
@@ -4259,14 +4362,16 @@ local function buildPlayerDataUI()
     layout.SortOrder = Enum.SortOrder.LayoutOrder
     layout.Parent = list
 
-    local function createRow(order)
+    local function createRow(order, parentFrame)
+        parentFrame = parentFrame or list
         local row = Instance.new("Frame")
         row.Size = UDim2.new(1, -8, 0, 0)
         row.AutomaticSize = Enum.AutomaticSize.Y
         row.BackgroundColor3 = Color3.fromRGB(38, 38, 44)
+        row.BackgroundTransparency = 0
         row.BorderSizePixel = 0
         row.LayoutOrder = order
-        row.Parent = list
+        row.Parent = parentFrame
 
         local c = Instance.new("UICorner")
         c.CornerRadius = UDim.new(0, 6)
@@ -4295,12 +4400,211 @@ local function buildPlayerDataUI()
         label.Font = bold and Enum.Font.SourceSansBold or Enum.Font.SourceSans
         label.TextSize = bold and 14 or 12
         label.TextColor3 = color or Color3.fromRGB(230, 230, 235)
+        label.TextTransparency = 0
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.TextWrapped = true
         label.Text = text
         label.LayoutOrder = order
         label.Parent = parent
         return label
+    end
+
+    -- Cửa sổ xem lại dữ liệu cũ đã lưu (1 -> 100) - làm rõ nét giống bảng gốc
+    local historyFrame = Instance.new("Frame")
+    historyFrame.Name = "HistoryPanel"
+    historyFrame.Size = UDim2.fromOffset(280, 260)
+    historyFrame.Position = UDim2.new(0.5, 290, 0.5, 0)
+    historyFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+    historyFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 32)
+    historyFrame.BackgroundTransparency = 0.05
+    historyFrame.BorderSizePixel = 0
+    historyFrame.Visible = false
+    historyFrame.Parent = gui
+
+    local hCorner = Instance.new("UICorner")
+    hCorner.CornerRadius = UDim.new(0, 8)
+    hCorner.Parent = historyFrame
+
+    local hStroke = Instance.new("UIStroke")
+    hStroke.Color = Color3.fromRGB(70, 70, 80)
+    hStroke.Thickness = 1
+    hStroke.Parent = historyFrame
+
+    local hTitleBar = Instance.new("Frame")
+    hTitleBar.Size = UDim2.new(1, 0, 0, 30)
+    hTitleBar.BackgroundColor3 = Color3.fromRGB(40, 40, 46)
+    hTitleBar.BackgroundTransparency = 0
+    hTitleBar.BorderSizePixel = 0
+    hTitleBar.Parent = historyFrame
+
+    local hTitleCorner = Instance.new("UICorner")
+    hTitleCorner.CornerRadius = UDim.new(0, 8)
+    hTitleCorner.Parent = hTitleBar
+
+    local hTitle = Instance.new("TextLabel")
+    hTitle.Size = UDim2.new(1, -68, 1, 0)
+    hTitle.Position = UDim2.fromOffset(10, 0)
+    hTitle.BackgroundTransparency = 1
+    hTitle.Font = Enum.Font.SourceSansBold
+    hTitle.TextSize = 15
+    hTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    hTitle.TextTransparency = 0
+    hTitle.TextXAlignment = Enum.TextXAlignment.Left
+    hTitle.TextTruncate = Enum.TextTruncate.AtEnd
+    hTitle.Text = "Data đã lưu (1-100)"
+    hTitle.Parent = hTitleBar
+
+    local hBackBtn = Instance.new("TextButton")
+    hBackBtn.Size = UDim2.fromOffset(34, 24)
+    hBackBtn.Position = UDim2.new(1, -64, 0.5, -12)
+    hBackBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 85)
+    hBackBtn.BackgroundTransparency = 0
+    hBackBtn.BorderSizePixel = 0
+    hBackBtn.Font = Enum.Font.SourceSansBold
+    hBackBtn.TextSize = 12
+    hBackBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    hBackBtn.TextTransparency = 0
+    hBackBtn.Text = "←"
+    hBackBtn.Visible = false
+    hBackBtn.Parent = hTitleBar
+
+    local hCloseBtn = Instance.new("TextButton")
+    hCloseBtn.Size = UDim2.fromOffset(26, 26)
+    hCloseBtn.Position = UDim2.new(1, -30, 0.5, -13)
+    hCloseBtn.BackgroundColor3 = Color3.fromRGB(190, 60, 60)
+    hCloseBtn.BackgroundTransparency = 0
+    hCloseBtn.BorderSizePixel = 0
+    hCloseBtn.Font = Enum.Font.SourceSansBold
+    hCloseBtn.TextSize = 16
+    hCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    hCloseBtn.TextTransparency = 0
+    hCloseBtn.Text = "×"
+    hCloseBtn.Parent = hTitleBar
+
+    local hList = Instance.new("ScrollingFrame")
+    hList.Size = UDim2.new(1, -12, 1, -42)
+    hList.Position = UDim2.fromOffset(6, 36)
+    hList.BackgroundTransparency = 1
+    hList.BorderSizePixel = 0
+    hList.ScrollBarThickness = 6
+    hList.ScrollBarImageColor3 = Color3.fromRGB(90, 90, 100)
+    hList.CanvasSize = UDim2.new(0, 0, 0, 0)
+    hList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    hList.Parent = historyFrame
+
+    local hLayout = Instance.new("UIListLayout")
+    hLayout.Padding = UDim.new(0, 4)
+    hLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    hLayout.Parent = hList
+
+    local selectedHistoryIndex = nil
+    local renderHistoryList
+
+    local function renderSnapshotDetail(index)
+        local snap = savedDataHistory[index]
+        if not snap then
+            selectedHistoryIndex = nil
+            renderHistoryList()
+            return
+        end
+
+        selectedHistoryIndex = index
+        hBackBtn.Visible = true
+        hTitle.Text = string.format("Bảng #%d (%s)", index, snap.savedAt)
+
+        for _, child in ipairs(hList:GetChildren()) do
+            if child:IsA("Frame") or child:IsA("TextButton") then
+                child:Destroy()
+            end
+        end
+
+        local order = 0
+        if #snap.players == 0 then
+            order = order + 1
+            local row = createRow(order, hList)
+            createLine(row, 1, "Không có người chơi trong bản lưu", true)
+            return
+        end
+
+        for _, pData in ipairs(snap.players) do
+            order = order + 1
+            local row = createRow(order, hList)
+            createLine(row, 1, pData.name, true, Color3.fromRGB(120, 200, 255))
+
+            if #pData.entries > 0 then
+                for i, lineText in ipairs(pData.entries) do
+                    createLine(row, i + 1, lineText, false)
+                end
+            else
+                createLine(row, 2, "Không có dữ liệu (máy chủ không đồng bộ)", false,
+                    Color3.fromRGB(160, 160, 170))
+            end
+        end
+    end
+
+    renderHistoryList = function()
+        selectedHistoryIndex = nil
+        hBackBtn.Visible = false
+        hTitle.Text = string.format("Data đã lưu (%d/%d)", #savedDataHistory, MAX_SAVED_HISTORY)
+
+        for _, child in ipairs(hList:GetChildren()) do
+            if child:IsA("Frame") or child:IsA("TextButton") then
+                child:Destroy()
+            end
+        end
+
+        if #savedDataHistory == 0 then
+            local row = createRow(1, hList)
+            createLine(row, 1, "Chưa có dữ liệu cũ nào được lưu", true, Color3.fromRGB(230, 230, 235))
+            createLine(row, 2, "Bấm 'Làm mới' hoặc mở lại bảng dữ liệu để tự động lưu.", false, Color3.fromRGB(180, 180, 190))
+            return
+        end
+
+        for idx = 1, #savedDataHistory do
+            local snap = savedDataHistory[idx]
+
+            local itemBtn = Instance.new("TextButton")
+            itemBtn.Size = UDim2.new(1, -8, 0, 38)
+            itemBtn.BackgroundColor3 = Color3.fromRGB(38, 38, 44)
+            itemBtn.BackgroundTransparency = 0
+            itemBtn.BorderSizePixel = 0
+            itemBtn.Text = ""
+            itemBtn.AutoButtonColor = true
+            itemBtn.LayoutOrder = idx
+            itemBtn.Parent = hList
+
+            local iCorner = Instance.new("UICorner")
+            iCorner.CornerRadius = UDim.new(0, 6)
+            iCorner.Parent = itemBtn
+
+            local titleLbl = Instance.new("TextLabel")
+            titleLbl.Size = UDim2.new(1, -12, 0, 18)
+            titleLbl.Position = UDim2.fromOffset(6, 2)
+            titleLbl.BackgroundTransparency = 1
+            titleLbl.Font = Enum.Font.SourceSansBold
+            titleLbl.TextSize = 14
+            titleLbl.TextColor3 = Color3.fromRGB(120, 200, 255)
+            titleLbl.TextTransparency = 0
+            titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+            titleLbl.Text = string.format("#%d - %d người chơi", idx, #snap.players)
+            titleLbl.Parent = itemBtn
+
+            local timeLbl = Instance.new("TextLabel")
+            timeLbl.Size = UDim2.new(1, -12, 0, 16)
+            timeLbl.Position = UDim2.fromOffset(6, 19)
+            timeLbl.BackgroundTransparency = 1
+            timeLbl.Font = Enum.Font.SourceSans
+            timeLbl.TextSize = 12
+            timeLbl.TextColor3 = Color3.fromRGB(230, 230, 235)
+            timeLbl.TextTransparency = 0
+            timeLbl.TextXAlignment = Enum.TextXAlignment.Left
+            timeLbl.Text = "Lưu lúc: " .. snap.savedAt
+            timeLbl.Parent = itemBtn
+
+            itemBtn.MouseButton1Click:Connect(function()
+                renderSnapshotDetail(idx)
+            end)
+        end
     end
 
     local function render()
@@ -4349,6 +4653,8 @@ local function buildPlayerDataUI()
                     Color3.fromRGB(160, 160, 170))
             end
         end
+
+        hasLoadedOnce = true
     end
 
     -- 连接管理
@@ -4398,8 +4704,33 @@ local function buildPlayerDataUI()
         end
     end)
 
+    -- Tự động lưu dữ liệu cũ trước khi làm mới
     bind(refreshBtn.MouseButton1Click, function()
+        savePreviousDataSnapshot()
         render()
+        if historyFrame.Visible and not selectedHistoryIndex then
+            renderHistoryList()
+        end
+    end)
+
+    -- Mở/đóng bảng xem lại dữ liệu cũ khi bấm nút "Data"
+    bind(dataBtn.MouseButton1Click, function()
+        historyFrame.Visible = not historyFrame.Visible
+        if historyFrame.Visible then
+            if selectedHistoryIndex then
+                renderSnapshotDetail(selectedHistoryIndex)
+            else
+                renderHistoryList()
+            end
+        end
+    end)
+
+    bind(hBackBtn.MouseButton1Click, function()
+        renderHistoryList()
+    end)
+
+    bind(hCloseBtn.MouseButton1Click, function()
+        historyFrame.Visible = false
     end)
 
     bind(closeBtn.MouseButton1Click, function()
@@ -4417,6 +4748,12 @@ local function buildPlayerDataUI()
         if gui.Parent then render() end
     end)
 
+    -- Nếu đã từng tải dữ liệu trước đó và mở lại bảng thì tự lưu bản cũ trước khi tải lại
+    if #savedDataHistory > 0 or playerDataUI ~= nil then
+        hasLoadedOnce = true
+        savePreviousDataSnapshot()
+    end
+
     render()
     return gui
 end
@@ -4431,7 +4768,6 @@ local function togglePlayerDataUI()
         Message("Xem dữ liệu", "Đã mở bảng dữ liệu", 2)
     end
 end
-
 -- 打滑消除
 local function toggleSlippageElimination(enabled)
     if enabled then
