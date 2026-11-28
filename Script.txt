@@ -4155,10 +4155,10 @@ local MAX_SAVED_HISTORY = 100
 local function buildPlayerDataUI()
     -- 本地化表
     local localization = {
-        MaxSize = "Kích thước",
-        Speed = "Tốc độ",
-        Multiplier = "Hệ số",
-        EatSpeed = "Tốc độ ăn",
+        MaxSize = "Size",
+        Speed = "Speed",
+        Multiplier = "Multi",
+        EatSpeed = "Speed Eat",
     }
 
     -- 成长函数
@@ -4306,7 +4306,7 @@ local function buildPlayerDataUI()
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.TextTruncate = Enum.TextTruncate.AtEnd
-    title.Text = "Dữ liệu người chơi"
+    title.Text = "Stat"
     title.Parent = titleBar
 
     -- Nút "Data" nằm kế nút "Làm mới"
@@ -8700,7 +8700,7 @@ local function ToggleGrabUI()
     end
 end
 
-otherSection:CreateToggle("Tự động bắt", function(enabled)
+otherSection:CreateToggle("Hold", function(enabled)
     ToggleGrabUI()
     -- 自动关闭开关
     for _, btn in ipairs(otherSection.Buttons) do
